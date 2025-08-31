@@ -4,37 +4,59 @@
   <meta charset="UTF-8">
   <title>Flying Bird - Soundness vApp</title>
   <style>
-    body { margin: 0; overflow: hidden; background: linear-gradient(to bottom, #87CEEB, #fff); font-family: sans-serif; }
-    canvas { display: block; margin: auto; background: #70c5ce; }
-    #score { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-size: 24px; font-weight: bold; }
+    body { margin: 0; background: #4ec0ca; overflow: hidden; }
+    canvas { display: block; margin: auto; background: linear-gradient(to bottom, #87CEEB, #fff); }
+    #score {
+      position: absolute; top: 15px; left: 50%;
+      transform: translateX(-50%); font-size: 28px;
+      font-weight: bold; color: #fff; text-shadow: 2px 2px #000;
+      font-family: 'Arial', sans-serif;
+    }
+    #gameOver {
+      display: none; position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); font-size: 36px;
+      color: red; font-weight: bold; background: #fff;
+      padding: 15px 30px; border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
   </style>
 </head>
 <body>
   <div id="score">Score: 0</div>
+  <div id="gameOver">Game Over<br>Click to Restart</div>
   <canvas id="gameCanvas" width="400" height="600"></canvas>
+
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
-    let frames = 0, score = 0;
-    const DEGREE = Math.PI / 180;
+    const scoreElement = document.getElementById("score");
+    const gameOverElement = document.getElementById("gameOver");
 
-    // bird
+    let frames = 0, score = 0, gameOver = false;
+
+    // background
+    const bg = new Image();
+    bg.src = "https://i.ibb.co/ZM5BdgC/bg.png"; // gambar langit
+
+    // bird sprite
+    const birdSprite = new Image();
+    birdSprite.src = "https://i.ibb.co/Wk5L6yL/bird.png"; // burung kecil
+
     const bird = {
-      x: 50, y: 150, w: 30, h: 30, gravity: 0.25, jump: 4.6, speed: 0, rotation: 0,
+      x: 50, y: 150, w: 34, h: 24, gravity: 0.25, jump: 4.6, speed: 0, rotation: 0,
       draw() {
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rotation);
-        ctx.fillStyle = "yellow";
-        ctx.fillRect(-this.w/2, -this.h/2, this.w, this.h);
+        ctx.drawImage(birdSprite, -this.w/2, -this.h/2, this.w, this.h);
         ctx.restore();
       },
       update() {
         this.speed += this.gravity;
         this.y += this.speed;
-        if(this.y + this.h/2 >= canvas.height) this.y = canvas.height - this.h/2;
-        if(this.y - this.h/2 <= 0) this.y = this.h/2;
-        this.rotation = this.speed >= this.jump ? 90 * DEGREE : -25 * DEGREE;
+        this.rotation = this.speed >= this.jump ? 90 * Math.PI/180 : -25 * Math.PI/180;
+        // game over kalau jatuh
+        if(this.y + this.h/2 >= canvas.height-50) gameOver = true;
       },
       flap() { this.speed = -this.jump; }
     };
@@ -42,13 +64,18 @@
     // pipes
     const pipes = {
       position: [],
-      w: 50, h: 400, gap: 120, dx: 2,
+      w: 60, h: 400, gap: 140, dx: 2,
       draw() {
-        ctx.fillStyle = "#228B22";
         this.position.forEach(p => {
           let topY = p.y;
           let bottomY = p.y + this.h + this.gap;
+
+          // atas
+          ctx.fillStyle = "#228B22";
           ctx.fillRect(p.x, topY, this.w, this.h);
+
+          // bawah
+          ctx.fillStyle = "#228B22";
           ctx.fillRect(p.x, bottomY, this.w, this.h);
         });
       },
@@ -59,26 +86,63 @@
         }
         this.position.forEach((p, i) => {
           p.x -= this.dx;
-          if(p.x + this.w <= 0){ this.position.splice(i,1); score++; document.getElementById("score").innerText = "Score: " + score; }
+
+          // tabrakan
+          if (bird.x + bird.w/2 > p.x && bird.x - bird.w/2 < p.x + this.w) {
+            if (bird.y - bird.h/2 < p.y + this.h || bird.y + bird.h/2 > p.y + this.h + this.gap) {
+              gameOver = true;
+            }
+          }
+
+          // kalau lewatin pipa, tambah score
+          if(p.x + this.w < bird.x && !p.passed){
+            score++;
+            p.passed = true;
+            scoreElement.innerText = "Score: " + score;
+          }
+
+          // hapus pipa kalau keluar layar
+          if(p.x + this.w <= 0) this.position.splice(i,1);
         });
       }
     };
 
+    // tanah
+    function drawGround(){
+      ctx.fillStyle = "#DEB887";
+      ctx.fillRect(0, canvas.height-50, canvas.width, 50);
+    }
+
     function loop(){
+      if (gameOver) {
+        gameOverElement.style.display = "block";
+        return;
+      }
+
       frames++;
-      ctx.fillStyle = "#70c5ce";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
 
-      pipes.update(); pipes.draw();
-      bird.update(); bird.draw();
+      pipes.update();
+      pipes.draw();
 
+      bird.update();
+      bird.draw();
+
+      drawGround();
       requestAnimationFrame(loop);
     }
 
-    document.addEventListener("keydown", e => { if(e.code === "Space") bird.flap(); });
-    document.addEventListener("click", () => bird.flap());
+    function resetGame(){
+      frames = 0; score = 0; bird.y = 150; bird.speed = 0; pipes.position = []; gameOver = false;
+      scoreElement.innerText = "Score: 0";
+      gameOverElement.style.display = "none";
+      loop();
+    }
 
-    loop();
+    document.addEventListener("keydown", e => { if(e.code === "Space" && !gameOver) bird.flap(); });
+    document.addEventListener("click", () => { if(gameOver) resetGame(); else bird.flap(); });
+
+    bg.onload = () => { loop(); }
   </script>
 </body>
 </html>
